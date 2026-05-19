@@ -19,7 +19,11 @@ export function generateKatalonScript({
 
   const { method, url, headers, body } = parseCurl(curl);
 
-  if (!url) errors.push('Could not detect URL from the cURL command.');
+  // Use placeholder URL if extraction failed
+  const finalUrl = url || 'https://api.example.com/TODO_ENDPOINT';
+  if (!url) {
+    errors.push('Could not detect URL from the cURL command — using placeholder.');
+  }
 
   const { assertions, error: respError } = generateAssertions(responseJson);
   if (respError) errors.push(respError);
@@ -70,7 +74,7 @@ export function generateKatalonScript({
 \t\t\ttry {
 \t\t\t\tWebUI.delay(2)
 \t\t\t\tRequestObject object = findTestObject('${escapeGroovySingle(requestObjectPath)}')
-\t\t\t\tString url = '${escapeGroovySingle(url)}'
+\t\t\t\tString url = '${escapeGroovySingle(finalUrl)}'
 \t\t\t\tobject.setRestUrl(url)
 \t\t\t\tList<TestObjectProperty> httpHeaderProperties = new ArrayList<>()
 ${headersBlock}
@@ -103,7 +107,7 @@ ${testCaseId}('${escapeGroovySingle(testCaseKeyDependency)}', '${escapeGroovySin
   return {
     script,
     method,
-    url,
+    url: finalUrl,
     headerCount: Object.keys(headers).length,
     assertionCount: assertions.length,
     errors,
