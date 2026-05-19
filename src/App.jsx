@@ -5,6 +5,8 @@ function App() {
   const [curlInput, setCurlInput] = useState('');
   const [responseInput, setResponseInput] = useState('');
   const [testCaseId, setTestCaseId] = useState('TC01');
+  const [testCaseKey, setTestCaseKey] = useState('DGCR-TXXXXX');
+  const [testCaseKeyDependency, setTestCaseKeyDependency] = useState('None');
   const [expectedStatus, setExpectedStatus] = useState('200');
   const [output, setOutput] = useState('');
   const [meta, setMeta] = useState(null);
@@ -23,6 +25,8 @@ function App() {
       curl: curlInput,
       responseJson: responseInput.trim() || '{}',
       testCaseId: testCaseId || 'TC01',
+      testCaseKey: testCaseKey || 'DGCR-TXXXXX',
+      testCaseKeyDependency: testCaseKeyDependency || 'None',
       expectedStatusCode: expectedStatus || 200,
     });
 
@@ -57,6 +61,10 @@ function App() {
   const handleClear = () => {
     setCurlInput('');
     setResponseInput('');
+    setTestCaseId('TC01');
+    setTestCaseKey('DGCR-TXXXXX');
+    setTestCaseKeyDependency('None');
+    setExpectedStatus('200');
     setOutput('');
     setMeta(null);
     setErrors([]);
@@ -91,6 +99,32 @@ function App() {
               onChange={(e) => setTestCaseId(e.target.value)}
               className="bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 w-32"
               placeholder="TC01"
+            />
+          </div>
+          <div>
+            <label htmlFor="testCaseKey" className="block text-xs font-medium text-gray-400 mb-1">
+              Test Case Key
+            </label>
+            <input
+              id="testCaseKey"
+              type="text"
+              value={testCaseKey}
+              onChange={(e) => setTestCaseKey(e.target.value)}
+              className="bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 w-44"
+              placeholder="DGCR-TXXXXX"
+            />
+          </div>
+          <div>
+            <label htmlFor="testCaseKeyDependency" className="block text-xs font-medium text-gray-400 mb-1">
+              Dependency Test Case Key
+            </label>
+            <input
+              id="testCaseKeyDependency"
+              type="text"
+              value={testCaseKeyDependency}
+              onChange={(e) => setTestCaseKeyDependency(e.target.value)}
+              className="bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 w-44"
+              placeholder="None"
             />
           </div>
           <div>

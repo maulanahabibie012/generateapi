@@ -9,6 +9,9 @@ export function generateKatalonScript({
   curl,
   responseJson,
   testCaseId = 'TC01',
+  testCaseKeyDependency = 'None',
+  testCaseKey = 'DGCR-TXXXXX',
+  testCycleKeyVar = 'testCycleKey',
   requestObjectFolder = 'Object Repository/API Objects - General',
   expectedStatusCode = 200,
 }) {
@@ -93,7 +96,9 @@ ${assertionsBlock}
 \t\t\t}
 \t\t}
 \t}
-}`;
+}
+
+${testCaseId}('${escapeGroovySingle(testCaseKeyDependency)}', '${escapeGroovySingle(testCaseKey)}', ${testCycleKeyVar})`;
 
   return {
     script,
