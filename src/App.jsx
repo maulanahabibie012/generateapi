@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
+import JSZip from 'jszip';
 import { generateKatalonScript } from './utils/katalonGenerator';
+import { parseTxtFile } from './utils/txtParser';
 
 function App() {
   const [curlInput, setCurlInput] = useState('');
@@ -12,6 +14,8 @@ function App() {
   const [meta, setMeta] = useState(null);
   const [errors, setErrors] = useState([]);
   const [copied, setCopied] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const fileInputRef = useRef(null);
 
   const handleGenerate = () => {
     if (!curlInput.trim()) {
@@ -68,6 +72,86 @@ function App() {
     setOutput('');
     setMeta(null);
     setErrors([]);
+  };
+
+  const handleZipUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Reset file input
+    event.target.value = '';
+
+    if (!file.name.endsWith('.zip')) {
+      setErrors(['Please upload a ZIP file. RAR files are not supported in the browser.']);
+      return;
+    }
+
+    setIsProcessing(true);
+    setErrors([]);
+    setOutput('');
+    setMeta(null);
+
+    try {
+      const zip = new JSZip();
+      const contents = await zip.loadAsync(file);
+
+      const txtFiles = Object.keys(contents.files)
+        .filter((name) => name.endsWith('.txt') && !contents.files[name].dir)
+        .sort();
+
+      if (txtFiles.length === 0) {
+        setErrors(['No .txt files found in the ZIP archive.']);
+        setIsProcessing(false);
+        return;
+      }
+
+      const allScripts = [];
+      const allErrors = [];
+      let totalHeaders = 0;
+      let totalAssertions = 0;
+
+      for (let i = 0; i < txtFiles.length; i++) {
+        const fileName = txtFiles[i];
+        const fileContent = await contents.files[fileName].async('string');
+        const { curl, responseJson } = parseTxtFile(fileContent);
+
+        if (!curl.trim()) {
+          allErrors.push(`${fileName}: No cURL command found`);
+          continue;
+        }
+
+        const tcId = `TC${String(i + 1).padStart(2, '0')}`;
+        const result = generateKatalonScript({
+          curl,
+          responseJson: responseJson || '{}',
+          testCaseId: tcId,
+          testCaseKey: testCaseKey || 'DGCR-TXXXXX',
+          testCaseKeyDependency: testCaseKeyDependency || 'None',
+          expectedStatusCode: expectedStatus || 200,
+        });
+
+        allScripts.push(`// ========== ${fileName} (${tcId}) ==========\n${result.script}`);
+        totalHeaders += result.headerCount;
+        totalAssertions += result.assertionCount;
+
+        if (result.errors.length > 0) {
+          allErrors.push(...result.errors.map((e) => `${fileName}: ${e}`));
+        }
+      }
+
+      setOutput(allScripts.join('\n\n'));
+      setMeta({
+        method: 'BATCH',
+        url: `${txtFiles.length} files processed`,
+        headerCount: totalHeaders,
+        assertionCount: totalAssertions,
+      });
+      setErrors(allErrors);
+    } catch (err) {
+      setErrors([`Failed to process ZIP file: ${err.message}`]);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   return (
@@ -174,7 +258,7 @@ function App() {
         </div>
 
         {/* Action Buttons */}
-        <div className="flex gap-3 mb-6">
+        <div className="flex flex-wrap gap-3 mb-6">
           <button
             onClick={handleGenerate}
             className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-900"
@@ -187,6 +271,21 @@ function App() {
           >
             Clear All
           </button>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isProcessing}
+            className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-800 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-gray-900"
+          >
+            {isProcessing ? 'Processing...' : 'Upload ZIP File'}
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".zip"
+            className="hidden"
+            onChange={handleZipUpload}
+            disabled={isProcessing}
+          />
         </div>
 
         {/* Errors */}
