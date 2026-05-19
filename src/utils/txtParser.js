@@ -1,16 +1,11 @@
 /**
  * Parse a single TXT file content into { curl, responseJson }.
  *
- * Robust against files that contain:
- * - Multiple JSON blocks (request + response)
- * - Trailing text after the JSON response
- * - Various separator styles
- *
  * Strategy:
  * 1. Detect explicit CURL: / RESPONSE: markers if present
- * 2. Otherwise, extract the cURL command (lines starting with `curl` plus continuation)
- *    and find all balanced JSON blocks in the rest of the file.
- * 3. Prefer JSON blocks that contain `status_code` or `meta` (the response).
+ * 2. Otherwise, locate the cURL command by finding a line starting with `curl`,
+ *    then track line continuations (`\` or `^`) to find where the cURL ends.
+ * 3. Search the remaining text for balanced JSON blocks and pick the best one.
  */
 export function parseTxtFile(content) {
   if (!content || typeof content !== 'string') {
@@ -31,30 +26,42 @@ export function parseTxtFile(content) {
     return { curl, responseJson: pickBestJsonBlock(responseRaw) };
   }
 
-  // Find where the cURL ends and JSON starts
   const lines = text.split('\n');
-  let firstJsonLine = -1;
 
+  // Locate the start of the cURL command (line starting with "curl ")
+  let curlStart = -1;
   for (let i = 0; i < lines.length; i++) {
-    const trimmed = lines[i].trim();
-    if ((trimmed.startsWith('{') || trimmed.startsWith('[')) && !trimmed.startsWith('curl')) {
-      firstJsonLine = i;
+    if (/^\s*curl\s/i.test(lines[i])) {
+      curlStart = i;
       break;
     }
   }
 
-  let curl = '';
-  let afterCurl = text;
-
-  if (firstJsonLine !== -1) {
-    curl = lines.slice(0, firstJsonLine).join('\n').trim();
-    afterCurl = lines.slice(firstJsonLine).join('\n');
-  } else {
-    // No JSON block detected; entire content is cURL
-    return { curl: text, responseJson: '' };
+  if (curlStart === -1) {
+    // No cURL found; treat all balanced JSON as response, leave curl empty
+    return { curl: '', responseJson: pickBestJsonBlock(text) };
   }
 
-  return { curl, responseJson: pickBestJsonBlock(afterCurl) };
+  // Determine where the cURL command ends by tracking backslash/caret continuations
+  let curlEnd = curlStart;
+  for (let i = curlStart; i < lines.length; i++) {
+    curlEnd = i;
+    const trimmed = lines[i].trimEnd();
+    const continues = trimmed.endsWith('\\') || trimmed.endsWith('^');
+    if (!continues) break;
+  }
+
+  const curl = lines.slice(curlStart, curlEnd + 1).join('\n').trim();
+  const afterCurl = lines.slice(curlEnd + 1).join('\n');
+  const beforeCurl = lines.slice(0, curlStart).join('\n');
+
+  // Search for JSON in the text after the cURL first; fall back to before-cURL
+  let responseJson = pickBestJsonBlock(afterCurl);
+  if (!responseJson && beforeCurl.trim()) {
+    responseJson = pickBestJsonBlock(beforeCurl);
+  }
+
+  return { curl, responseJson };
 }
 
 /**
@@ -106,7 +113,8 @@ function extractJsonBlocks(text) {
       let depth = 0;
       let inString = false;
       let escape = false;
-      let start = i;
+      const start = i;
+      let consumed = false;
 
       for (let j = i; j < len; j++) {
         const ch = text[j];
@@ -133,7 +141,6 @@ function extractJsonBlocks(text) {
           depth--;
           if (depth === 0) {
             const candidate = text.substring(start, j + 1).trim();
-            // Validate it parses
             try {
               JSON.parse(candidate);
               blocks.push(candidate);
@@ -141,13 +148,16 @@ function extractJsonBlocks(text) {
               // Not valid JSON, skip
             }
             i = j + 1;
+            consumed = true;
             break;
           }
         }
       }
 
-      // If we exited the inner loop without finding a balanced close, stop
-      if (depth !== 0) break;
+      if (!consumed) {
+        // Unbalanced from this position; skip this opening char and continue
+        i++;
+      }
     } else {
       i++;
     }
