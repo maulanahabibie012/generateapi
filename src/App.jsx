@@ -110,19 +110,28 @@ function App() {
       let totalHeaders = 0;
       let totalAssertions = 0;
 
+      let successCount = 0;
+
       for (let i = 0; i < txtFiles.length; i++) {
         const fileName = txtFiles[i];
-        const fileContent = await contents.files[fileName].async('string');
+        const tcId = `TC${String(i + 1).padStart(2, '0')}`;
+
+        let fileContent = '';
+        try {
+          fileContent = await contents.files[fileName].async('string');
+        } catch (readErr) {
+          allErrors.push(`${fileName}: Failed to read file — ${readErr.message}`);
+          // Still generate a skeleton
+        }
+
         const { curl, responseJson } = parseTxtFile(fileContent);
 
         if (!curl.trim()) {
-          allErrors.push(`${fileName}: No cURL command found`);
-          continue;
+          allErrors.push(`${fileName}: cURL not detected — generated skeleton`);
         }
 
-        const tcId = `TC${String(i + 1).padStart(2, '0')}`;
         const result = generateKatalonScript({
-          curl,
+          curl: curl || `curl -X GET 'https://TODO_URL_FROM_${fileName}'`,
           responseJson: responseJson || '{}',
           testCaseId: tcId,
           testCaseKey: testCaseKey || 'DGCR-TXXXXX',
@@ -133,6 +142,7 @@ function App() {
         allScripts.push(`// ========== ${fileName} (${tcId}) ==========\n${result.script}`);
         totalHeaders += result.headerCount;
         totalAssertions += result.assertionCount;
+        successCount++;
 
         if (result.errors.length > 0) {
           allErrors.push(...result.errors.map((e) => `${fileName}: ${e}`));
@@ -142,7 +152,7 @@ function App() {
       setOutput(allScripts.join('\n\n'));
       setMeta({
         method: 'BATCH',
-        url: `${txtFiles.length} files processed`,
+        url: `${successCount}/${txtFiles.length} files processed`,
         headerCount: totalHeaders,
         assertionCount: totalAssertions,
       });
