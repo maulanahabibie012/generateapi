@@ -64,6 +64,7 @@ export function parseCurl(curlCommand) {
     '--http1.0',
     '-g',
     '--globoff',
+    '--resolve',
   ]);
 
   for (let i = 0; i < tokens.length; i++) {

@@ -6,7 +6,11 @@
  * - status_desc or status_description field (typically in meta.status_desc)
  */
 export function generateAssertions(responseInput, options = {}) {
-  const { rootVar = 'result' } = options;
+  const {
+    rootVar = 'result',
+    useToString = true,
+    quoteStyle = 'single',
+  } = options;
 
   let parsed;
   try {
@@ -21,18 +25,22 @@ export function generateAssertions(responseInput, options = {}) {
   const statusCodePath = findFieldPath(parsed, 'status_code');
   const statusDescPath = findFieldPath(parsed, ['status_desc', 'status_description']);
 
+  const quote = quoteStyle === 'double' ? '"' : "'";
+
   if (statusCodePath) {
     const value = getValueAtPath(parsed, statusCodePath);
-    const literal = formatGroovyLiteral(value);
+    const literal = formatLiteral(value, quote);
     const groovyPath = `${rootVar}${pathToGroovy(statusCodePath)}`;
-    assertions.push(`WebUI.verifyMatch(${groovyPath}.toString(), ${literal}, false)`);
+    const pathWithToString = useToString ? `${groovyPath}.toString()` : groovyPath;
+    assertions.push(`WebUI.verifyMatch(${pathWithToString}, ${literal}, false)`);
   }
 
   if (statusDescPath) {
     const value = getValueAtPath(parsed, statusDescPath);
-    const literal = formatGroovyLiteral(value);
+    const literal = formatLiteral(value, quote);
     const groovyPath = `${rootVar}${pathToGroovy(statusDescPath)}`;
-    assertions.push(`WebUI.verifyMatch(${groovyPath}.toString(), ${literal}, false)`);
+    const pathWithToString = useToString ? `${groovyPath}.toString()` : groovyPath;
+    assertions.push(`WebUI.verifyMatch(${pathWithToString}, ${literal}, false)`);
   }
 
   return { assertions, error: null };
@@ -86,12 +94,17 @@ function pathToGroovy(path) {
   }).join('');
 }
 
-function formatGroovyLiteral(value) {
-  if (typeof value === 'boolean') return `'${value}'`;
-  if (typeof value === 'number') return `'${value}'`;
-  return `'${escapeSingle(String(value))}'`;
+function formatLiteral(value, quoteChar = "'") {
+  const escaped = quoteChar === '"'
+    ? escapeDouble(String(value))
+    : escapeSingle(String(value));
+  return `${quoteChar}${escaped}${quoteChar}`;
 }
 
 function escapeSingle(str) {
   return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+function escapeDouble(str) {
+  return String(str).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 }

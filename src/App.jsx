@@ -2,8 +2,11 @@ import { useState, useRef } from 'react';
 import JSZip from 'jszip';
 import { generateKatalonScript } from './utils/katalonGenerator';
 import { parseTxtFile } from './utils/txtParser';
+import { cleanCurlInput } from './utils/curlCleaner';
+import BulkUpload from './components/BulkUpload';
 
 function App() {
+  const [activeTab, setActiveTab] = useState('single');
   const [curlInput, setCurlInput] = useState('');
   const [responseInput, setResponseInput] = useState('');
   const [testCaseId, setTestCaseId] = useState('TC01');
@@ -25,8 +28,10 @@ function App() {
       return;
     }
 
+    const cleanedCurl = cleanCurlInput(curlInput);
+
     const result = generateKatalonScript({
-      curl: curlInput,
+      curl: cleanedCurl,
       responseJson: responseInput.trim() || '{}',
       testCaseId: testCaseId || 'TC01',
       testCaseKey: testCaseKey || 'DGCR-TXXXXX',
@@ -50,7 +55,6 @@ function App() {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Fallback
       const textarea = document.createElement('textarea');
       textarea.value = output;
       document.body.appendChild(textarea);
@@ -96,7 +100,7 @@ function App() {
       const contents = await zip.loadAsync(file);
 
       const txtFiles = Object.keys(contents.files)
-        .filter((name) => name.endsWith('.txt') && !contents.files[name].dir)
+        .filter((name) => /\.txt$/i.test(name) && !contents.files[name].dir)
         .sort();
 
       if (txtFiles.length === 0) {
@@ -121,7 +125,6 @@ function App() {
           fileContent = await contents.files[fileName].async('string');
         } catch (readErr) {
           allErrors.push(`${fileName}: Failed to read file — ${readErr.message}`);
-          // Still generate a skeleton
         }
 
         const { curl, responseJson } = parseTxtFile(fileContent);
@@ -164,6 +167,11 @@ function App() {
     }
   };
 
+  const tabs = [
+    { id: 'single', label: 'Single cURL' },
+    { id: 'bulk', label: 'Bulk TXT Upload' },
+  ];
+
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100">
       {/* Header */}
@@ -179,162 +187,191 @@ function App() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-6">
-        {/* Settings Row */}
-        <div className="flex flex-wrap gap-4 mb-6">
-          <div>
-            <label htmlFor="testCaseId" className="block text-xs font-medium text-gray-400 mb-1">
-              Test Case ID
-            </label>
-            <input
-              id="testCaseId"
-              type="text"
-              value={testCaseId}
-              onChange={(e) => setTestCaseId(e.target.value)}
-              className="bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 w-32"
-              placeholder="TC01"
-            />
-          </div>
-          <div>
-            <label htmlFor="testCaseKey" className="block text-xs font-medium text-gray-400 mb-1">
-              Test Case Key
-            </label>
-            <input
-              id="testCaseKey"
-              type="text"
-              value={testCaseKey}
-              onChange={(e) => setTestCaseKey(e.target.value)}
-              className="bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 w-44"
-              placeholder="DGCR-TXXXXX"
-            />
-          </div>
-          <div>
-            <label htmlFor="testCaseKeyDependency" className="block text-xs font-medium text-gray-400 mb-1">
-              Dependency Test Case Key
-            </label>
-            <input
-              id="testCaseKeyDependency"
-              type="text"
-              value={testCaseKeyDependency}
-              onChange={(e) => setTestCaseKeyDependency(e.target.value)}
-              className="bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 w-44"
-              placeholder="None"
-            />
-          </div>
-          <div>
-            <label htmlFor="expectedStatus" className="block text-xs font-medium text-gray-400 mb-1">
-              Expected Status Code
-            </label>
-            <input
-              id="expectedStatus"
-              type="text"
-              value={expectedStatus}
-              onChange={(e) => setExpectedStatus(e.target.value)}
-              className="bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 w-24"
-              placeholder="200"
-            />
-          </div>
-        </div>
-
-        {/* Input Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          {/* cURL Input */}
-          <div>
-            <label htmlFor="curlInput" className="block text-sm font-medium text-gray-300 mb-2">
-              cURL Command
-            </label>
-            <textarea
-              id="curlInput"
-              value={curlInput}
-              onChange={(e) => setCurlInput(e.target.value)}
-              className="w-full h-64 bg-gray-800 border border-gray-600 rounded-lg p-3 text-sm font-mono text-gray-200 resize-y focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder-gray-500"
-              placeholder={`curl -X GET 'https://api.example.com/endpoint' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer token123'`}
-            />
-          </div>
-
-          {/* Response Input */}
-          <div>
-            <label htmlFor="responseInput" className="block text-sm font-medium text-gray-300 mb-2">
-              Example API Response (JSON)
-            </label>
-            <textarea
-              id="responseInput"
-              value={responseInput}
-              onChange={(e) => setResponseInput(e.target.value)}
-              className="w-full h-64 bg-gray-800 border border-gray-600 rounded-lg p-3 text-sm font-mono text-gray-200 resize-y focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder-gray-500"
-              placeholder={`{\n  "meta": {\n    "status_code": "00000",\n    "status_desc": "Success"\n  },\n  "data": { ... }\n}`}
-            />
-          </div>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex flex-wrap gap-3 mb-6">
-          <button
-            onClick={handleGenerate}
-            className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-900"
-          >
-            Generate Script
-          </button>
-          <button
-            onClick={handleClear}
-            className="px-5 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-gray-900"
-          >
-            Clear All
-          </button>
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isProcessing}
-            className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-800 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-gray-900"
-          >
-            {isProcessing ? 'Processing...' : 'Upload ZIP File'}
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".zip"
-            className="hidden"
-            onChange={handleZipUpload}
-            disabled={isProcessing}
-          />
-        </div>
-
-        {/* Errors */}
-        {errors.length > 0 && (
-          <div className="mb-4 p-3 bg-red-900/50 border border-red-700 rounded-lg">
-            {errors.map((err, i) => (
-              <p key={i} className="text-sm text-red-300">⚠ {err}</p>
+      {/* Tab Navigation */}
+      <div className="border-b border-gray-700 bg-gray-800/50">
+        <div className="max-w-7xl mx-auto px-4">
+          <nav className="flex gap-1" aria-label="Tabs">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors ${
+                  activeTab === tab.id
+                    ? 'bg-gray-900 text-indigo-400 border-t-2 border-indigo-500'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700/50'
+                }`}
+              >
+                {tab.label}
+              </button>
             ))}
-          </div>
-        )}
+          </nav>
+        </div>
+      </div>
 
-        {/* Output Section */}
-        {output && (
-          <div>
-            {/* Meta Info */}
-            {meta && (
-              <div className="flex flex-wrap gap-4 mb-3 text-xs text-gray-400">
-                <span className="bg-gray-800 px-2 py-1 rounded">Method: <span className="text-indigo-400 font-medium">{meta.method}</span></span>
-                <span className="bg-gray-800 px-2 py-1 rounded">Headers: <span className="text-indigo-400 font-medium">{meta.headerCount}</span></span>
-                <span className="bg-gray-800 px-2 py-1 rounded">Assertions: <span className="text-indigo-400 font-medium">{meta.assertionCount}</span></span>
+      <main className="max-w-7xl mx-auto px-4 py-6">
+        {activeTab === 'single' && (
+          <>
+            {/* Settings Row */}
+            <div className="flex flex-wrap gap-4 mb-6">
+              <div>
+                <label htmlFor="testCaseId" className="block text-xs font-medium text-gray-400 mb-1">
+                  Test Case ID
+                </label>
+                <input
+                  id="testCaseId"
+                  type="text"
+                  value={testCaseId}
+                  onChange={(e) => setTestCaseId(e.target.value)}
+                  className="bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 w-32"
+                  placeholder="TC01"
+                />
+              </div>
+              <div>
+                <label htmlFor="testCaseKey" className="block text-xs font-medium text-gray-400 mb-1">
+                  Test Case Key
+                </label>
+                <input
+                  id="testCaseKey"
+                  type="text"
+                  value={testCaseKey}
+                  onChange={(e) => setTestCaseKey(e.target.value)}
+                  className="bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 w-44"
+                  placeholder="DGCR-TXXXXX"
+                />
+              </div>
+              <div>
+                <label htmlFor="testCaseKeyDependency" className="block text-xs font-medium text-gray-400 mb-1">
+                  Dependency Test Case Key
+                </label>
+                <input
+                  id="testCaseKeyDependency"
+                  type="text"
+                  value={testCaseKeyDependency}
+                  onChange={(e) => setTestCaseKeyDependency(e.target.value)}
+                  className="bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 w-44"
+                  placeholder="None"
+                />
+              </div>
+              <div>
+                <label htmlFor="expectedStatus" className="block text-xs font-medium text-gray-400 mb-1">
+                  Expected Status Code
+                </label>
+                <input
+                  id="expectedStatus"
+                  type="text"
+                  value={expectedStatus}
+                  onChange={(e) => setExpectedStatus(e.target.value)}
+                  className="bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 w-24"
+                  placeholder="200"
+                />
+              </div>
+            </div>
+
+            {/* Input Section */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+              {/* cURL Input */}
+              <div>
+                <label htmlFor="curlInput" className="block text-sm font-medium text-gray-300 mb-2">
+                  cURL Command
+                </label>
+                <textarea
+                  id="curlInput"
+                  value={curlInput}
+                  onChange={(e) => setCurlInput(e.target.value)}
+                  className="w-full h-64 bg-gray-800 border border-gray-600 rounded-lg p-3 text-sm font-mono text-gray-200 resize-y focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder-gray-500"
+                  placeholder={`curl -X GET 'https://api.example.com/endpoint' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer token123'`}
+                />
+              </div>
+
+              {/* Response Input */}
+              <div>
+                <label htmlFor="responseInput" className="block text-sm font-medium text-gray-300 mb-2">
+                  Example API Response (JSON)
+                </label>
+                <textarea
+                  id="responseInput"
+                  value={responseInput}
+                  onChange={(e) => setResponseInput(e.target.value)}
+                  className="w-full h-64 bg-gray-800 border border-gray-600 rounded-lg p-3 text-sm font-mono text-gray-200 resize-y focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder-gray-500"
+                  placeholder={`{\n  "meta": {\n    "status_code": "00000",\n    "status_desc": "Success"\n  },\n  "data": { ... }\n}`}
+                />
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-wrap gap-3 mb-6">
+              <button
+                onClick={handleGenerate}
+                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-900"
+              >
+                Generate Script
+              </button>
+              <button
+                onClick={handleClear}
+                className="px-5 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-gray-900"
+              >
+                Clear All
+              </button>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isProcessing}
+                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-800 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-gray-900"
+              >
+                {isProcessing ? 'Processing...' : 'Upload ZIP File'}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".zip"
+                className="hidden"
+                onChange={handleZipUpload}
+                disabled={isProcessing}
+              />
+            </div>
+
+            {/* Errors */}
+            {errors.length > 0 && (
+              <div className="mb-4 p-3 bg-red-900/50 border border-red-700 rounded-lg">
+                {errors.map((err, i) => (
+                  <p key={i} className="text-sm text-red-300">⚠ {err}</p>
+                ))}
               </div>
             )}
 
-            <div className="relative">
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-sm font-medium text-gray-300">Generated Katalon Script (Groovy)</label>
-                <button
-                  onClick={handleCopy}
-                  className="px-3 py-1 text-xs bg-gray-700 hover:bg-gray-600 text-gray-200 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  {copied ? '✓ Copied!' : 'Copy to Clipboard'}
-                </button>
+            {/* Output Section */}
+            {output && (
+              <div>
+                {/* Meta Info */}
+                {meta && (
+                  <div className="flex flex-wrap gap-4 mb-3 text-xs text-gray-400">
+                    <span className="bg-gray-800 px-2 py-1 rounded">Method: <span className="text-indigo-400 font-medium">{meta.method}</span></span>
+                    <span className="bg-gray-800 px-2 py-1 rounded">Headers: <span className="text-indigo-400 font-medium">{meta.headerCount}</span></span>
+                    <span className="bg-gray-800 px-2 py-1 rounded">Assertions: <span className="text-indigo-400 font-medium">{meta.assertionCount}</span></span>
+                  </div>
+                )}
+
+                <div className="relative">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-sm font-medium text-gray-300">Generated Katalon Script (Groovy)</label>
+                    <button
+                      onClick={handleCopy}
+                      className="px-3 py-1 text-xs bg-gray-700 hover:bg-gray-600 text-gray-200 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                      {copied ? '✓ Copied!' : 'Copy to Clipboard'}
+                    </button>
+                  </div>
+                  <textarea
+                    readOnly
+                    value={output}
+                    className="w-full h-[500px] bg-gray-800 border border-gray-600 rounded-lg p-4 text-sm font-mono text-green-300 resize-y focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
               </div>
-              <pre className="w-full bg-gray-800 border border-gray-600 rounded-lg p-4 text-sm font-mono text-green-300 overflow-x-auto max-h-[600px] overflow-y-auto whitespace-pre">
-                {output}
-              </pre>
-            </div>
-          </div>
+            )}
+          </>
         )}
+
+        {activeTab === 'bulk' && <BulkUpload />}
       </main>
 
       {/* Footer */}

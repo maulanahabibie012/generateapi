@@ -1,5 +1,5 @@
 /**
- * Parse a single TXT file content into { curl, responseJson }.
+ * Parse a single TXT file content into { curl, responseJson, expectedStatus }.
  *
  * Lenient parser that handles many real-world TXT formats:
  * - Markdown code fences (```bash / ```curl / ```)
@@ -7,10 +7,11 @@
  * - Preamble text before the cURL
  * - Multiple JSON blocks (request body, sample response, etc.)
  * - Trailing notes after the JSON response
+ * - Expected status code after "RESPONSE\n=========" pattern
  */
 export function parseTxtFile(content) {
   if (!content || typeof content !== 'string') {
-    return { curl: '', responseJson: '' };
+    return { curl: '', responseJson: '', expectedStatus: 200 };
   }
 
   // Normalize line endings and strip markdown code fences
@@ -18,15 +19,32 @@ export function parseTxtFile(content) {
   text = text.replace(/```[a-zA-Z]*\n?/g, '').replace(/```/g, '');
   text = text.trim();
 
-  // Format B: explicit RESPONSE: marker
+  // Extract expected status code from "RESPONSE\n=====" pattern
+  let expectedStatus = extractExpectedStatus(text);
+
+  // Format B: explicit RESPONSE: marker or "RESPONSE\n=====" pattern
   const responseMarker = /^\s*RESPONSE\s*:?\s*$/im;
-  if (responseMarker.test(text)) {
-    const splitIdx = text.search(responseMarker);
-    const beforeResponse = text.substring(0, splitIdx);
-    const afterResponse = text.replace(/^[\s\S]*?^\s*RESPONSE\s*:?\s*$\n?/im, '');
+  const responseHeaderPattern = /RESPONSE\s*\n\s*[=]+\s*\n?/i;
+  
+  if (responseMarker.test(text) || responseHeaderPattern.test(text)) {
+    // Find where RESPONSE section starts
+    let splitIdx = -1;
+    let afterResponse = '';
+    
+    // Check for "RESPONSE\n=====" pattern first
+    const headerMatch = text.match(responseHeaderPattern);
+    if (headerMatch) {
+      splitIdx = text.search(responseHeaderPattern);
+      afterResponse = text.substring(splitIdx + headerMatch[0].length);
+    } else if (responseMarker.test(text)) {
+      splitIdx = text.search(responseMarker);
+      afterResponse = text.replace(/^[\s\S]*?^\s*RESPONSE\s*:?\s*$\n?/im, '');
+    }
+    
+    const beforeResponse = splitIdx >= 0 ? text.substring(0, splitIdx) : text;
     const curl = extractCurlBlock(beforeResponse);
     const responseJson = pickBestJsonBlock(afterResponse) || pickBestJsonBlock(beforeResponse);
-    return { curl, responseJson };
+    return { curl, responseJson, expectedStatus };
   }
 
   // General case: locate cURL anywhere in the text
@@ -48,7 +66,36 @@ export function parseTxtFile(content) {
     responseJson = pickBestJsonBlock(text);
   }
 
-  return { curl, responseJson };
+  return { curl, responseJson, expectedStatus };
+}
+
+/**
+ * Extract expected status code from text.
+ * Searches for the first 3-digit integer (100-599) that appears anywhere
+ * after the "RESPONSE\n=====" header marker.
+ */
+function extractExpectedStatus(text) {
+  // Find the RESPONSE\n===== header
+  const headerMatch = text.match(/RESPONSE\s*\n\s*[=]+/i);
+  if (!headerMatch) {
+    return 200;
+  }
+  
+  const headerEndIdx = headerMatch.index + headerMatch[0].length;
+  const afterHeader = text.substring(headerEndIdx);
+  
+  // Find the first 3-digit integer in the text after the header
+  // Use word boundary to ensure it's a standalone 3-digit number
+  const statusMatch = afterHeader.match(/\b(\d{3})\b/);
+  if (statusMatch) {
+    const code = parseInt(statusMatch[1], 10);
+    if (code >= 100 && code < 600) {
+      return code;
+    }
+  }
+  
+  // Default to 200
+  return 200;
 }
 
 /**
@@ -64,6 +111,22 @@ function extractCurlBlock(text) {
   let startIdx = -1;
   for (let i = 0; i < lines.length; i++) {
     const trimmed = lines[i].trim();
+    
+    // Skip "CURL" header line
+    if (/^CURL$/i.test(trimmed)) {
+      continue;
+    }
+    
+    // Skip separator lines like "=====" or "-----"
+    if (/^[=:\-]+$/.test(trimmed)) {
+      continue;
+    }
+    
+    // Skip single-line patterns like "CURL ====="
+    if (/^CURL\s*[=:\-]+$/i.test(trimmed)) {
+      continue;
+    }
+    
     // Match "curl ", "curl.exe ", or curl as the token (not part of another word)
     if (/(?:^|\s)curl(?:\.exe)?(?:\s|$)/i.test(trimmed)) {
       // Avoid false positives where "curl" is just a word in prose
