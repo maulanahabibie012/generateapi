@@ -4,6 +4,7 @@ import { generateKatalonScript } from './utils/katalonGenerator';
 import { parseTxtFile } from './utils/txtParser';
 import { cleanCurlInput } from './utils/curlCleaner';
 import BulkUpload from './components/BulkUpload';
+import TestCaseMapper from './components/TestCaseMapper';
 
 function App() {
   const [activeTab, setActiveTab] = useState('single');
@@ -170,6 +171,7 @@ function App() {
   const tabs = [
     { id: 'single', label: 'Single cURL' },
     { id: 'bulk', label: 'Bulk TXT Upload' },
+    { id: 'mapper', label: 'TestCase Mapper' },
   ];
 
   return (
@@ -372,6 +374,7 @@ function App() {
         )}
 
         {activeTab === 'bulk' && <BulkUpload />}
+        {activeTab === 'mapper' && <TestCaseMapper />}
       </main>
 
       {/* Footer */}
