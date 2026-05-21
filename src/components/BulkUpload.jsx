@@ -5,12 +5,26 @@ import { parseTxtFile } from '../utils/txtParser';
 function BulkUpload() {
   const [testCaseKey, setTestCaseKey] = useState('DGCR-TXXXXX');
   const [testCaseKeyDependency, setTestCaseKeyDependency] = useState('None');
+  const [startTcId, setStartTcId] = useState('TC01');
   const [output, setOutput] = useState('');
   const [errors, setErrors] = useState([]);
   const [meta, setMeta] = useState(null);
   const [copied, setCopied] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const fileInputRef = useRef(null);
+
+  // Parse Start TCID into prefix, starting number, and padding width
+  const parseStartTcId = (value) => {
+    const match = (value || 'TC01').match(/^([A-Za-z_]*)(\d+)$/);
+    if (!match) {
+      return { prefix: 'TC', startNum: 1, padWidth: 2 };
+    }
+    return {
+      prefix: match[1] || 'TC',
+      startNum: parseInt(match[2], 10),
+      padWidth: match[2].length,
+    };
+  };
 
   const handleBulkUpload = async (event) => {
     const files = Array.from(event.target.files || []);
@@ -44,9 +58,11 @@ function BulkUpload() {
       let totalAssertions = 0;
       let successCount = 0;
 
+      const { prefix, startNum, padWidth } = parseStartTcId(startTcId);
+
       for (let i = 0; i < txtFiles.length; i++) {
         const file = txtFiles[i];
-        const tcId = `TC${String(i + 1).padStart(2, '0')}`;
+        const tcId = `${prefix}${String(startNum + i).padStart(padWidth, '0')}`;
 
         let fileContent = '';
         try {
@@ -156,6 +172,19 @@ function BulkUpload() {
             onChange={(e) => setTestCaseKeyDependency(e.target.value)}
             className="bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 w-44"
             placeholder="None"
+          />
+        </div>
+        <div>
+          <label htmlFor="bulkStartTcId" className="block text-xs font-medium text-gray-400 mb-1">
+            Start TCID
+          </label>
+          <input
+            id="bulkStartTcId"
+            type="text"
+            value={startTcId}
+            onChange={(e) => setStartTcId(e.target.value)}
+            className="bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 w-32"
+            placeholder="TC01"
           />
         </div>
       </div>
