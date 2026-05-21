@@ -43,15 +43,19 @@ function TestCaseMapper() {
       
       // Find column indices
       const headerRow = jsonData[0];
-      const testCaseIdColIndex = headerRow.findIndex(h => 
+      const testCaseIdColIndex = headerRow.findIndex(h =>
         h && h.toString().toLowerCase().includes('test case id')
       );
-      const testCaseKeyColIndex = headerRow.findIndex(h => 
-        h && h.toString().toLowerCase().includes('key')
-      );
+      const testCaseKeyColIndex = headerRow.findIndex(h => {
+        const headerLower = h && h.toString().toLowerCase();
+        return headerLower && (
+          headerLower.includes('test case.key') ||
+          headerLower.includes('test case key')
+        );
+      });
 
       if (testCaseIdColIndex === -1 || testCaseKeyColIndex === -1) {
-        setErrors(['Could not find "Test Case ID" or "Key" columns in Excel file']);
+        setErrors(['Could not find "Test Case ID" or "Test Case.Key" columns in Excel file']);
         setIsProcessing(false);
         return;
       }
@@ -140,7 +144,7 @@ function TestCaseMapper() {
           <strong>Format Input:</strong> <code className="bg-blue-900/50 px-1 rounded">TCID(dependency, DGCR-TXXXXX, TestCycleKey)</code>
         </p>
         <p className="text-sm text-blue-300">
-          <strong>Excel Format:</strong> Kolom "Test Case ID" dan "Key" akan digunakan untuk mapping
+          <strong>Excel Format:</strong> Kolom "Test Case.Test Case ID" dan "Test Case.Key" akan digunakan untuk mapping
         </p>
       </div>
 
