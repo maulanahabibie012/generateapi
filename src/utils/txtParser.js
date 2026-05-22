@@ -11,7 +11,7 @@
  */
 export function parseTxtFile(content) {
   if (!content || typeof content !== 'string') {
-    return { curl: '', responseJson: '', expectedStatus: 200 };
+    return { curl: '', responseJson: '', expectedStatus: 0 };
   }
 
   // Normalize line endings and strip markdown code fences
@@ -74,6 +74,7 @@ export function parseTxtFile(content) {
  * Searches for:
  * 1. First 3-digit integer after "RESPONSE\n=====" header marker
  * 2. HTTP/1.1 xxx pattern (e.g., "HTTP/1.1 200")
+ * Returns 0 if no status code found.
  */
 function extractExpectedStatus(text) {
   // Try to find status code after "RESPONSE\n====" header first
@@ -102,8 +103,8 @@ function extractExpectedStatus(text) {
     }
   }
   
-  // Default to 200
-  return 200;
+  // Default to 0 if no status code found
+  return 0;
 }
 
 /**
