@@ -207,6 +207,7 @@ function countUnescaped(line, quoteChar) {
 
 /**
  * Extract all balanced JSON blocks from text and pick the most response-like one.
+ * Prefers the last JSON block (typically the actual API response after HTTP headers).
  */
 function pickBestJsonBlock(text) {
   if (!text) return '';
@@ -219,12 +220,15 @@ function pickBestJsonBlock(text) {
   let bestBlock = blocks[0];
   let bestScore = -1;
 
-  for (const block of blocks) {
+  for (let blockIdx = 0; blockIdx < blocks.length; blockIdx++) {
+    const block = blocks[blockIdx];
     let score = 0;
     for (const key of preferKeys) {
       if (block.includes(`"${key}"`)) score += 10;
     }
     score += Math.min(block.length / 100, 5);
+    // Prefer later blocks (higher index = later in text = likely the response)
+    score += blockIdx * 0.5;
     if (score > bestScore) {
       bestScore = score;
       bestBlock = block;
