@@ -55,12 +55,9 @@ export function parseTxtFile(content) {
     // Search for JSON in text after the cURL block
     const curlEndIdx = text.indexOf(curl) + curl.length;
     const afterCurl = text.substring(curlEndIdx);
-    const beforeCurl = text.substring(0, text.indexOf(curl));
 
-    responseJson = pickBestJsonBlock(afterCurl);
-    if (!responseJson) {
-      responseJson = pickBestJsonBlock(beforeCurl);
-    }
+    // Always pick the LAST JSON block in afterCurl (typically the API response after HTTP headers)
+    responseJson = pickLastJsonBlock(afterCurl);
   } else {
     // No cURL detected; pick any JSON block as the response
     responseJson = pickBestJsonBlock(text);
@@ -203,6 +200,20 @@ function countUnescaped(line, quoteChar) {
     }
   }
   return count;
+}
+
+/**
+ * Extract the LAST JSON block from text.
+ * Used for finding the actual API response after HTTP headers.
+ */
+function pickLastJsonBlock(text) {
+  if (!text) return '';
+
+  const blocks = extractJsonBlocks(text);
+  if (blocks.length === 0) return '';
+  
+  // Return the last block
+  return blocks[blocks.length - 1];
 }
 
 /**
