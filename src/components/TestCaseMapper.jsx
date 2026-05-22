@@ -96,7 +96,7 @@ function TestCaseMapper() {
         
         if (mapping[tcid]) {
           const newKey = mapping[tcid];
-          const newLine = `${tcid}(${dependency}, ${newKey}, ${testCycleKey})`;
+          const newLine = `${tcid}(${dependency}, '${newKey}', ${testCycleKey})`;
           outputLines.push(newLine);
         } else {
           outputLines.push(trimmed);
