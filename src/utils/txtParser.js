@@ -71,24 +71,32 @@ export function parseTxtFile(content) {
 
 /**
  * Extract expected status code from text.
- * Searches for the first 3-digit integer (100-599) that appears anywhere
- * after the "RESPONSE\n=====" header marker.
+ * Searches for:
+ * 1. First 3-digit integer after "RESPONSE\n=====" header marker
+ * 2. HTTP/1.1 xxx pattern (e.g., "HTTP/1.1 200")
  */
 function extractExpectedStatus(text) {
-  // Find the RESPONSE\n===== header
+  // Try to find status code after "RESPONSE\n====" header first
   const headerMatch = text.match(/RESPONSE\s*\n\s*[=]+/i);
-  if (!headerMatch) {
-    return 200;
+  if (headerMatch) {
+    const headerEndIdx = headerMatch.index + headerMatch[0].length;
+    const afterHeader = text.substring(headerEndIdx);
+    
+    // Find the first 3-digit integer in the text after the header
+    // Use word boundary to ensure it's a standalone 3-digit number
+    const statusMatch = afterHeader.match(/\b(\d{3})\b/);
+    if (statusMatch) {
+      const code = parseInt(statusMatch[1], 10);
+      if (code >= 100 && code < 600) {
+        return code;
+      }
+    }
   }
   
-  const headerEndIdx = headerMatch.index + headerMatch[0].length;
-  const afterHeader = text.substring(headerEndIdx);
-  
-  // Find the first 3-digit integer in the text after the header
-  // Use word boundary to ensure it's a standalone 3-digit number
-  const statusMatch = afterHeader.match(/\b(\d{3})\b/);
-  if (statusMatch) {
-    const code = parseInt(statusMatch[1], 10);
+  // Try to find HTTP/1.1 xxx pattern
+  const httpMatch = text.match(/HTTP\/1\.\d+\s+(\d{3})/i);
+  if (httpMatch) {
+    const code = parseInt(httpMatch[1], 10);
     if (code >= 100 && code < 600) {
       return code;
     }
